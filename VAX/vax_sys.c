@@ -55,7 +55,220 @@
 #define ODC(x)          ((x) << DR_V_USPMASK)
 #endif
 
+#if 1 // Nick
+#undef fprintf
+#undef fputs
+#undef fputc
+
+/* Max width of a value expressed as a formatted string */
+#define MAX_WIDTH ((int) ((CHAR_BIT * sizeof (t_value) * 4 + 3)/3))
+
+int32 PSL;
+REG cpu_reg[1];
+UNIT cpu_unit;
+int32 sim_switch_number;
+
+const t_value width_mask[] = { 0,
+    0x1, 0x3, 0x7, 0xF,
+    0x1F, 0x3F, 0x7F, 0xFF,
+    0x1FF, 0x3FF, 0x7FF, 0xFFF,
+    0x1FFF, 0x3FFF, 0x7FFF, 0xFFFF,
+    0x1FFFF, 0x3FFFF, 0x7FFFF, 0xFFFFF,
+    0x1FFFFF, 0x3FFFFF, 0x7FFFFF, 0xFFFFFF,
+    0x1FFFFFF, 0x3FFFFFF, 0x7FFFFFF, 0xFFFFFFF,
+    0x1FFFFFFF, 0x3FFFFFFF, 0x7FFFFFFF, 0xFFFFFFFF
+#if defined (USE_INT64)
+    , 0x1FFFFFFFF, 0x3FFFFFFFF, 0x7FFFFFFFF, 0xFFFFFFFFF,
+    0x1FFFFFFFFF, 0x3FFFFFFFFF, 0x7FFFFFFFFF, 0xFFFFFFFFFF,
+    0x1FFFFFFFFFF, 0x3FFFFFFFFFF, 0x7FFFFFFFFFF, 0xFFFFFFFFFFF,
+    0x1FFFFFFFFFFF, 0x3FFFFFFFFFFF, 0x7FFFFFFFFFFF, 0xFFFFFFFFFFFF,
+    0x1FFFFFFFFFFFF, 0x3FFFFFFFFFFFF, 0x7FFFFFFFFFFFF, 0xFFFFFFFFFFFFF,
+    0x1FFFFFFFFFFFFF, 0x3FFFFFFFFFFFFF, 0x7FFFFFFFFFFFFF, 0xFFFFFFFFFFFFFF,
+    0x1FFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFF,
+    0x7FFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFF,
+    0x1FFFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFFF,
+    0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF
+#endif
+    };
+
+DEVICE *find_dev_from_unit(UNIT *uptr) {
+  return NULL;
+}
+
+t_stat fprint_sym_cm (FILE *of, t_addr addr, t_value *bytes, int32 sw) {
+  abort();
+}
+
+t_stat parse_sym_cm (const char *cptr, t_addr addr, t_value *bytes, int32 sw) {
+  abort();
+}
+
+CONST char *get_glyph(const char *iptr, char *optr, char mchar) {
+  abort();
+}
+
+t_value get_uint(const char *cptr, uint32 radix, t_value max, t_stat *status) {
+  abort();
+}
+
+int sim_isspace (int c) {
+  return ((c < 0) || (c >= 128)) ? 0 : isspace (c);
+}
+
+int sim_toupper (int c) {
+  return ((c >= 'a') && (c <= 'z')) ? ((c - 'a') + 'A') : c;
+}
+
+int sim_isalnum (int c) {
+  return ((c < 0) || (c >= 128)) ? 0 : isalnum (c);
+}
+
+int sim_isdigit (int c) {
+  return ((c >= '0') && (c <= '9'));
+}
+
+t_stat sprint_val (char *buffer, t_value val, uint32 radix,
+    uint32 width, uint32 format)
+{
+t_value owtest, wtest;
+t_bool negative = FALSE;
+int32 d, digit, ndigits, commas = 0;
+char dbuf[MAX_WIDTH + 1];
+
+if (((format == PV_LEFTSIGN) || (format == PV_RCOMMASIGN)) &&
+    (0 > (t_svalue)val)) {
+    val = (t_value)(-((t_svalue)val));
+    negative = TRUE;
+    }
+memset (dbuf, (format == PV_RZRO)? '0': ' ', MAX_WIDTH);
+dbuf[MAX_WIDTH] = 0;
+d = MAX_WIDTH;
+do {
+    d = d - 1;
+    digit = (int32) (val % radix);
+    val = val / radix;
+    dbuf[d] = (char)((digit <= 9)? '0' + digit: 'A' + (digit - 10));
+    } while ((d > 0) && (val != 0));
+if (negative && (format == PV_LEFTSIGN))
+    dbuf[--d] = '-';
+
+switch (format) {
+    case PV_LEFT:
+    case PV_LEFTSIGN:
+        break;
+    case PV_RCOMMA:
+    case PV_RCOMMASIGN:
+        for (digit = 0; digit < MAX_WIDTH; digit++)
+            if (dbuf[digit] != ' ')
+                break;
+        ndigits = MAX_WIDTH - digit;
+        commas = (ndigits - 1)/3;
+        for (digit=0; digit<ndigits-3; digit++)
+            dbuf[MAX_WIDTH + (digit - ndigits) - (ndigits - digit - 1)/3] = dbuf[MAX_WIDTH + (digit - ndigits)];
+        for (digit=1; digit<=commas; digit++)
+            dbuf[MAX_WIDTH - (digit * 4)] = ',';
+        d = d - commas;
+        if (negative && (format == PV_RCOMMASIGN))
+            dbuf[--d] = '-';
+        if (width > MAX_WIDTH) {
+            if (!buffer)
+                return width;
+            sprintf (buffer, "%*s", -((int)width), dbuf);
+            return SCPE_OK;
+            }
+        else
+            if (width > 0)
+                d = MAX_WIDTH - width;
+        break;
+    case PV_RZRO:
+    case PV_RSPC:
+        wtest = owtest = radix;
+        ndigits = 1;
+        while ((wtest < width_mask[width]) && (wtest >= owtest)) {
+            owtest = wtest;
+            wtest = wtest * radix;
+            ndigits = ndigits + 1;
+            }
+        if ((MAX_WIDTH - (ndigits + commas)) < d)
+            d = MAX_WIDTH - (ndigits + commas);
+        break;
+    }
+if (!buffer)
+    return strlen(dbuf+d);
+*buffer = '\0';
+if (width < strlen(dbuf+d))
+    return SCPE_IOERR;
+strcpy(buffer, dbuf+d);
+return SCPE_OK;
+}
+
+t_stat fprint_val (FILE *stream, t_value val, uint32 radix,
+    uint32 width, uint32 format)
+{
+char dbuf[MAX_WIDTH + 1];
+
+if (!stream)
+    return sprint_val (NULL, val, radix, width, format);
+if (width > MAX_WIDTH)
+    width = MAX_WIDTH;
+sprint_val (dbuf, val, radix, width, format);
+if (fprintf (stream, "%s", dbuf) < 0)
+    return SCPE_IOERR;
+return SCPE_OK;
+}
+
+t_value strtotv (CONST char *inptr, CONST char **endptr, uint32 radix)
+{
+t_bool nodigits;
+t_value val;
+uint32 c, digit;
+
+if (endptr)
+    *endptr = inptr;                                    /* assume fails */
+if (((radix < 2) || (radix > 36)) && (radix != 0))
+    return 0;
+while (sim_isspace (*inptr))                            /* bypass white space */
+    inptr++;
+if (((radix == 0) || (radix == 16)) && 
+    ((!memcmp("0x", inptr, 2)) || (!memcmp("0X", inptr, 2)))) {
+    radix = 16;
+    inptr += 2;
+    }
+if (((radix == 0) || (radix == 2)) && 
+    ((!memcmp("0b", inptr, 2)) || (!memcmp("0B", inptr, 2)))) {
+    radix = 2;
+    inptr += 2;
+    }
+if ((radix == 0) && (*inptr == '0'))            /* Default radix and octal? */
+    radix = 8;
+if (radix == 0)                                 /* Default base 10 radix */
+    radix = 10;
+val = 0;
+nodigits = TRUE;
+for (c = *inptr; sim_isalnum(c); c = *++inptr) {        /* loop through char */
+    c = sim_toupper (c);
+    if (sim_isdigit (c))                                /* digit? */
+        digit = c - (uint32) '0';
+    else {
+        if (radix <= 10)                                /* stop if not expected */
+            break;
+        else 
+            digit = c + 10 - (uint32) 'A';              /* convert letter */
+        }
+    if (digit >= radix)                                 /* valid in radix? */
+        return 0;
+    val = (val * radix) + digit;                        /* add to value */
+    nodigits = FALSE;
+    }
+if (nodigits)                                           /* no digits? */
+    return 0;
+if (endptr)
+    *endptr = inptr;                                    /* result pointer */
+return val;
+}
+#else
 extern REG cpu_reg[];
+#endif
 
 t_stat fprint_sym_m (FILE *of, uint32 addr, t_value *val);
 int32 fprint_sym_qoimm (FILE *of, t_value *val, int32 vp, int32 lnt);
@@ -755,11 +968,13 @@ if (uptr == NULL)                                       /* anon = CPU */
     uptr = &cpu_unit;
 if ((sw & SIM_SW_STOP) && (PSL & PSL_CM))               /* stop in CM? */
     sw = sw | SWMASK ('P');                             /* force CM print */
+#if 0 // Nick
 dptr = find_dev_from_unit (uptr);                       /* find dev */
 if (dptr == NULL)
     return SCPE_IERR;
 if (dptr->dwidth != 8)                                  /* byte dev only */
     return SCPE_ARG;
+#endif
 if (sw & SWMASK ('B'))                                  /* get length */
     lnt = 1;
 else if (sw & SWMASK ('W'))
@@ -1472,3 +1687,53 @@ for (i = prev = 0; i < lnt; i++) {
 return vp;
 }
 
+#if 1 // Nick
+int main(void) {
+  t_value val[16] = {
+    0, 1, 2, 3, 4, 5, 6, 7,
+    8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf
+  };
+
+  printf("addressing modes\n");
+  for (int i = 0; i < 0x100; ++i) {
+    val[0] = 0x94;
+    val[1] = i;
+    t_stat stat = fprint_sym_m(stdout, 0, val);
+    if (stat >= 1)
+      printf(".BYTE %X", val[0]);
+    printf("\n");
+  }
+  val[1] = 1;
+  printf("\n");
+
+  printf("opcodes\n");
+  for (int i = 0; i < 0x100; ++i) {
+    val[0] = i;
+    t_stat stat = fprint_sym_m(stdout, 0, val);
+    if (stat >= 1)
+      printf(".BYTE %X", val[0]);
+    printf("\n");
+  }
+  printf("\n");
+
+  t_value val2[16] = {
+    0, 0, 1, 2, 3, 4, 5, 6,
+    7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe
+  };
+
+  for (int i = 0xfd; i < 0xfe; ++i) { //0x100; ++i) {
+    printf("opcodes %02x\n", i);
+    val2[0] = i;
+    for (int j = 0; j < 0x100; ++j) {
+      val2[1] = j;
+      t_stat stat = fprint_sym_m(stdout, 0, val2);
+      if (stat >= 1)
+        printf(".BYTE %X,%X", val2[0], val2[1]);
+      printf("\n");
+    }
+    printf("\n");
+  }
+
+  return 0;
+}
+#endif

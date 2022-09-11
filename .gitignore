@@ -46,3 +46,4 @@ Visual Studio Projects/*
 !Visual Studio Projects/*.sln
 !Visual Studio Projects/0ReadMe_Projects.txt
 /PDP11/pdp11_sys
+/VAX/vax_sys
