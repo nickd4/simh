@@ -70,6 +70,36 @@
 #include "pdp11_defs.h"
 #include <ctype.h>
 
+#if 1 // Nick
+#define Fgetc fgetc
+#undef fprintf
+
+int32 FPS;
+uint16 *M;
+REG cpu_reg[1];
+UNIT cpu_unit;
+int32 saved_PC;
+
+DEVICE *find_dev_from_unit(UNIT *uptr) {
+  return NULL;
+}
+
+CONST char *get_glyph(const char *iptr, char *optr, char mchar) {
+  abort();
+}
+
+t_value get_uint(const char *cptr, uint32 radix, t_value max, t_stat *status) {
+  abort();
+}
+
+int sim_isspace (int c) {
+  return ((c < 0) || (c >= 128)) ? 0 : isspace (c);
+}
+
+t_stat sim_messagef(t_stat stat, const char *fmt, ...) {
+  abort();
+}
+#else
 extern DEVICE cpu_dev;
 extern DEVICE sys_dev;
 extern DEVICE ptr_dev;
@@ -124,6 +154,7 @@ extern DEVICE daz_dev;
 #endif
 extern REG cpu_reg[];
 extern int32 saved_PC;
+#endif
 
 /* SCP data structures and interface routines
 
@@ -145,6 +176,7 @@ REG *sim_PC = &cpu_reg[0];
 
 int32 sim_emax = 4;
 
+#if 0
 DEVICE *sim_devices[] = {
     &cpu_dev,
     &sys_dev,
@@ -217,6 +249,7 @@ DEVICE *sim_devices[] = {
 #endif
     NULL
     };
+#endif
 
 const char *sim_stop_messages[SCPE_BASE] = {
     "Unknown error",
@@ -1137,3 +1170,31 @@ if (*cptr != 0)                                         /* junk at end? */
     return SCPE_ARG;
 return ((n1 + n2) * 2) - 1;
 }
+
+#if 1 // Nick
+int main(void) {
+  t_value val[4] = {0, 01234, 02345, 03456};
+
+  printf("addressing modes\n");
+  for (int i = 0; i < 0x3f; ++i) {
+    val[0] = 05000 | i;
+    t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
+    if (stat >= 1)
+      printf(".WORD %o", val[0]);
+    printf("\n");
+  }
+  printf("\n");
+
+  printf("opcodes\n");
+  for (int i = 0; i < 0x400; ++i) {
+    val[0] = (i << 6) | 027;
+    t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
+    if (stat >= 1)
+      printf(".WORD %o", val[0]);
+    printf("\n");
+  }
+  printf("\n");
+
+  return 0;
+}
+#endif
