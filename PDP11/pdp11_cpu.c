@@ -419,6 +419,7 @@ BITFIELD psw_bits[] = {
 };
 
 REG cpu_reg[] = {
+#if 0
     { ORDATAD (PC, saved_PC, 16,            "Program Counter") },
     { ORDATAD (R0, REGFILE[0][0], 16,       "General Purpose R0") },
     { ORDATAD (R1, REGFILE[1][0], 16,       "General Purpose R1") },
@@ -577,14 +578,18 @@ REG cpu_reg[] = {
     { FLDATAD (STOP_VECA, stop_vecabort, 0, "stop on read abort in trap or interrupt") },
     { FLDATAD (STOP_SPA, stop_spabort, 0,   "stop on stack abort in trap or interrupt") },
     { FLDATA (AUTOCON, autcon_enb, 0), REG_HRO },
+#endif
     { BRDATAD (PCQ, pcq, 8, 16, PCQ_SIZE, "PC prior to last jump, branch, or interrupt; Most recent PC change first"), REG_RO+REG_CIRC },
+#if 0
     { ORDATA (PCQP, pcq_p, 6), REG_HRO },
     { ORDATAD (WRU, sim_int_char, 8, "interrupt character") },
     { ORDATA (MODEL, cpu_model, 16), REG_HRO },
     { ORDATA (OPTIONS, cpu_opt, 32), REG_HRO },
     { NULL}
+#endif
     };
 
+#if 0 // Nick
 MTAB cpu_mod[] = {
     { MTAB_XTD|MTAB_VDV, 0, "TYPE", NULL,
       NULL, &cpu_show_model },
@@ -677,17 +682,45 @@ BRKTYPTAB cpu_breakpoints [] = {
     BRKTYPE('X',"Write to Physical Address"),
     { 0 }
     };
+#endif
 
 DEVICE cpu_dev = {
-    "CPU", &cpu_unit, cpu_reg, cpu_mod,
+    "CPU", &cpu_unit, cpu_reg, NULL/*cpu_mod*/,
     1, 8, 22, 2, 8, 16,
-    &cpu_ex, &cpu_dep, &cpu_reset,
-    &cpu_boot, NULL, NULL,
+    NULL/*&cpu_ex*/, NULL/*&cpu_dep*/, &cpu_reset,
+    NULL/*&cpu_boot*/, NULL, NULL,
     NULL, DEV_DYNM, 0,
-    NULL, &cpu_set_size, NULL,
-    &cpu_help, NULL, NULL, &cpu_description,
-    cpu_breakpoints
+    NULL, NULL/*&cpu_set_size*/, NULL,
+    NULL/*&cpu_help*/, NULL, NULL, NULL/*&cpu_description*/,
+    NULL/*cpu_breakpoints*/
     };
+
+#if 1 // Nick
+int32 CPUERR, MAINT;
+int32 sim_interval = 0x100;
+int32 sim_int_char;
+
+int32 calc_ints(int32 nipl, int32 trq) {
+  return 0;
+}
+
+int32 get_vector(int32 nipl) {
+  return 0;
+}
+
+t_bool sim_idle(uint32 tmr, int sin_cyc) {
+  abort();
+}
+
+t_stat sim_process_event (void) {
+  sim_interval = 0x100;
+  return SCPE_OK;
+}
+
+t_stat reset_all(uint32 start_device) {
+  abort();
+}
+#endif
 
 t_value pdp11_pc_value (void)
 {
@@ -696,11 +729,13 @@ return (t_value)PC;
 
 t_stat sim_instr (void)
 {
-int abortval, i;
+int /*abortval,*/ i;
 volatile int32 trapea;                                  /* used by setjmp */
 InstHistory *hst_ent = NULL;
 
+#if 0 // Nick
 sim_vm_pc_value = &pdp11_pc_value;
+#endif
 
 /* Restore register state
 
@@ -711,11 +746,13 @@ sim_vm_pc_value = &pdp11_pc_value;
         5. Interrupt system
 */
 
+#if 0 // Nick
 reason = build_dib_tab ();                              /* build, chk dib_tab */
 if (reason != SCPE_OK)
     return reason;
 if (MEMSIZE >= (cpu_tab[cpu_model].maxm - IOPAGESIZE))  /* mem size >= max - io page? */
     MEMSIZE = cpu_tab[cpu_model].maxm - IOPAGESIZE;     /* max - io page */
+#endif
 cpu_type = 1u << cpu_model;                             /* reset type mask */
 cpu_bme = (MMR3 & MMR3_BME) && (cpu_opt & OPT_UBM);     /* map enabled? */
 PC = saved_PC;
@@ -750,6 +787,7 @@ reason = 0;
    after setjmp, must be volatile or global.
 */
 
+#if 0 // Nick
 abortval = setjmp (save_env);                           /* set abort hdlr */
 if (abortval == ABRT_BKPT) {
     /* Breakpoint encountered.  */
@@ -797,6 +835,7 @@ else {
             }
         }
     }
+#endif
 
 /* Main instruction fetch/decode loop
 
@@ -804,7 +843,7 @@ else {
    for stop condition.  If interrupt, locate the vector.
 */ 
 
-while (reason == 0)  {
+do/*while (reason == 0)*/  {
 
     int32 IR, srcspec, srcreg, dstspec, dstreg;
     int32 src, src2, dst, ea;
@@ -825,7 +864,9 @@ while (reason == 0)  {
         STACKFILE[cm] = SP;
         saved_PC = PC & 0177777;
         pcq_r->qptr = pcq_p;                            /* update pc q ptr */
+#if 0 // Nick
         set_r_display (rs, cm);
+#endif
 
         reason = sim_process_event ();                  /* process events */
 
@@ -936,12 +977,14 @@ while (reason == 0)  {
        to be restored are handled explicitly.  */
     inst_psw = get_PSW ();
     saved_sim_interval = sim_interval;
+#if 0 // Nick
     if (BPT_SUMM_PC) {                                  /* possible breakpoint */
         t_addr pa = relocR (PC | isenable);             /* relocate PC */
         if (sim_brk_test (PC, BPT_PCVIR) ||             /* Normal PC breakpoint? */
             sim_brk_test (pa, BPT_PCPHY))               /* Physical Address breakpoint? */
             ABORT (ABRT_BKPT);                          /* stop simulation */
         }
+#endif
 
     if (update_MM) {                                    /* if mm not frozen */
         MMR1 = 0;
@@ -953,6 +996,7 @@ while (reason == 0)  {
     dstspec = IR & 077;
     srcreg = (srcspec <= 07);                           /* src, dst = rmode? */
     dstreg = (dstspec <= 07);
+#if 0 // Nick
     if (hst_lnt) {                                      /* record history? */
         t_value val;
         uint32 i;
@@ -976,7 +1020,11 @@ while (reason == 0)  {
         if (hst_p >= hst_lnt)
             hst_p = 0;
         }
+#endif
     PC = (PC + 2) & 0177777;                            /* incr PC, mod 65k */
+#if 1 // Nick
+    ea = 0; // shut up compiler
+#endif
     switch ((IR >> 12) & 017) {                         /* decode IR<15:12> */
 
 /* Opcode 0: no operands, specials, branches, JSR, SOPs */
@@ -1049,7 +1097,7 @@ while (reason == 0)  {
                     setTRAP (TRAP_TRC);                 /* RTI immed trap */
                 break;
             case 7:                                     /* MFPT */
-                if (CPUT (HAS_MFPT))                    /* implemented? */
+                if (0/*CPUT (HAS_MFPT)*/)                    /* implemented? */
                     R[0] = cpu_tab[cpu_model].mfpt;     /* get type */
                 else setTRAP (TRAP_ILL);
                 break;
@@ -2405,7 +2453,7 @@ while (reason == 0)  {
         else setTRAP (TRAP_ILL);
         break;                                          /* end case 017 */
         }                                               /* end switch op */
-    }                                                   /* end main loop */
+    } while (0);                                                   /* end main loop */
 
 /* Simulation halted */
 
@@ -2415,7 +2463,9 @@ for (i = 0; i < 6; i++)
 STACKFILE[cm] = SP;
 saved_PC = PC & 0177777;
 pcq_r->qptr = pcq_p;                                    /* update pc q ptr */
+#if 0 // Nick
 set_r_display (rs, cm);
+#endif
 return reason;
 }
 
@@ -2589,6 +2639,7 @@ switch (spec >> 3) {                                    /* decode spec<5:3> */
         }                                               /* end switch */
 }
 
+#if 0 // Nick
 /* Read byte and word routines, read only and read-modify-write versions
 
    Inputs:
@@ -3189,6 +3240,7 @@ else APRFILE[idx] = ((APRFILE[idx] & ~0177777) |
     (data & cpu_tab[cpu_model].pdr)) & ~(PDR_A|PDR_W);
 return SCPE_OK;
 }
+#endif
 
 /* Explicit PSW read */
 
@@ -3211,6 +3263,7 @@ return (cm << PSW_V_CM) | (pm << PSW_V_PM) |
     (V << PSW_V_V) | (C << PSW_V_C);
 }
 
+#if 0 // Nick
 /* Explicit PSW write - T-bit may be protected */
 
 t_stat PSW_wr (int32 data, int32 pa, int32 access)
@@ -3240,12 +3293,15 @@ isenable = calc_is (cm);
 dsenable = calc_ds (cm);
 return SCPE_OK;
 }
+#endif
 
 /* Store pieces of new PSW - implements RTI/RTT protection */
 
 void put_PSW (int32 val, t_bool prot)
 {
+#if 0 // Nick
 val = val & cpu_tab[cpu_model].psw;                     /* mask off invalid bits */
+#endif
 if (prot) {                                             /* protected? */
     cm = cm | ((val >> PSW_V_CM) & 03);                 /* or to cm,pm,rs */
     pm = pm | ((val >> PSW_V_PM) & 03);                 /* can't change ipl */
@@ -3336,6 +3392,7 @@ else if (CPUT (HAS_STKLR)) {                            /* register limit? */
 return;                                                 /* no stack limit */
 }
 
+#if 0 // Nick
 /*
  * This sequence of instructions is a mix that mimics
  * a resonable instruction set that is a close estimate
@@ -3387,6 +3444,7 @@ if ((rom == NULL) ||
     return SCPE_2FARG;
 return SCPE_OK;
 }
+#endif
 
 /* Reset routine */
 
@@ -3408,6 +3466,7 @@ if (M == NULL) {                    /* First time init */
     M = (uint16 *) calloc (MEMSIZE >> 1, sizeof (uint16));
     if (M == NULL)
         return SCPE_MEM;
+#if 0 // Nick
     sim_set_pchar (0, "01000023640"); /* ESC, CR, LF, TAB, BS, BEL, ENQ */
     sim_brk_dflt = SWMASK ('E');
     sim_brk_types = sim_brk_dflt|SWMASK ('P')|
@@ -3417,17 +3476,23 @@ if (M == NULL) {                    /* First time init */
     sim_vm_is_subroutine_call = &cpu_is_pc_a_subroutine_call;
     sim_clock_precalibrate_commands = pdp11_clock_precalibrate_commands;
     auto_config(NULL, 0);           /* do an initial auto configure */
+#endif
     }
-pcq_r = find_reg ("PCQ", NULL, dptr);
+pcq_r = cpu_reg/*find_reg ("PCQ", NULL, dptr)*/;
 if (pcq_r)
     pcq_r->qptr = 0;
 else
     return SCPE_IERR;
+#if 1 // Nick
+    return SCPE_OK;
+#else
 set_r_display (0, MD_KER);
 sim_vm_cmd = pdp11_cmd;
 return build_dib_tab ();            /* build, chk dib_tab */
+#endif
 }
 
+#if 0
 static const char *cpu_next_caveats =
 "The NEXT command in the PDP11 simulator currently will enable stepping\n"
 "across subroutine calls which are initiated by the JSR instruction.\n"
@@ -3438,7 +3503,9 @@ static const char *cpu_next_caveats =
 "If the called routine returns somewhere other than one of these\n"
 "locations due to a trap, stack unwind or any other reason, instruction\n"
 "execution will continue until some other reason causes execution to stop.\n";
+#endif
 
+#if 0 //Nick
 t_bool cpu_is_pc_a_subroutine_call (t_addr **ret_addrs)
 {
 #define MAX_SUB_RETURN_SKIP 10
@@ -3480,6 +3547,7 @@ if ((sim_eval[0] & 0177000) == 0004000) {               /* JSR */
     }
 return FALSE;
 }
+#endif
 
 /* Boot setup routine */
 
@@ -3490,6 +3558,7 @@ PSW = 000340;
 return;
 }
 
+#if 0 // Nick
 /* Memory examine */
 
 t_stat cpu_ex (t_value *vptr, t_addr addr, UNIT *uptr, int32 sw)
@@ -3791,3 +3860,4 @@ fprintf (st, "All devices support the SHOW <device> ADDRESS and SHOW <device> VE
 fprintf (st, "commands, which display the device address and vector, respectively.\n\n");
 return SCPE_OK;
 }
+#endif

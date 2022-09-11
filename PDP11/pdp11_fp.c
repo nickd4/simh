@@ -734,6 +734,23 @@ switch (spec >> 3) {                                    /* case on spec */
 return 0;
 }
 
+#if 1 // Nick
+uint32 ReadI(int32 VA, int32 spec, int32 len) {
+  abort();
+}
+
+t_bool ReadFP(fpac_t *fptr, int32 VA, int32 spec, int32 len) {
+  abort();
+}
+
+void WriteI(int32 data, int32 VA, int32 spec, int32 len) {
+  abort();
+}
+
+void WriteFP(fpac_t *fptr, int32 VA, int32 spec, int32 len) {
+  abort();
+}
+#else
 /* Read integer operand
 
    Inputs:
@@ -893,6 +910,7 @@ PWriteW ((fptr->l >> FP_V_F2) & 0177777, pa3);
 PWriteW ((fptr->l >> FP_V_F3) & 0177777, pa4);
 return;
 }
+#endif
 
 /* FIS instructions */
 
