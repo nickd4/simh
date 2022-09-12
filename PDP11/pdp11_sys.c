@@ -71,6 +71,9 @@
 #include <ctype.h>
 
 #if 1 // Nick
+#include <fcntl.h>
+#include <unistd.h>
+
 #define Fgetc fgetc
 #undef fprintf
 
@@ -1172,28 +1175,68 @@ return ((n1 + n2) * 2) - 1;
 }
 
 #if 1 // Nick
-int main(void) {
-  t_value val[4] = {0, 01234, 02345, 03456};
+static uint8 mem[0x10008]; // 8 bytes slop for disassembly lookahead
 
-  printf("addressing modes\n");
-  for (int i = 0; i < 0x3f; ++i) {
-    val[0] = 05000 | i;
-    t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
-    if (stat >= 1)
-      printf(".WORD %o", val[0]);
+int main(int argc, char **argv) {
+  if (argc >= 2) {
+    // command-line argument is .bin file to disassemble
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+      perror(argv[1]);
+      exit(EXIT_FAILURE);
+    }
+
+    ssize_t result = read(fd, mem, 0x10000);
+    if (result == (ssize_t)-1) {
+      perror("read()");
+      exit(EXIT_FAILURE);
+    }
+    int size = (int)result;
+
+    close(fd);
+
+    t_value val[4];
+    int pc = 0;
+    while (pc < size) {
+      val[0] = mem[pc] | (mem[pc + 1] << 8);
+      val[1] = mem[pc + 2] | (mem[pc + 3] << 8);
+      val[2] = mem[pc + 4] | (mem[pc + 5] << 8);
+      val[3] = mem[pc + 6] | (mem[pc + 7] << 8);
+      printf("%06o ", pc);
+      t_stat stat = fprint_sym(stdout, pc, val, NULL, SWMASK('M'));
+      if (stat < 1)
+        pc += 1 - stat;
+      else {
+        printf(".WORD %o", val[0]);
+        pc += 2;
+      }
+      printf("\n");
+    }
+  }
+  else {
+    // with no command-line argument, print opcode table
+    t_value val[4] = {0, 01234, 02345, 03456};
+
+    printf("addressing modes\n");
+    for (int i = 0; i < 0x3f; ++i) {
+      val[0] = 05000 | i;
+      t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
+      if (stat >= 1)
+        printf(".WORD %o", val[0]);
+      printf("\n");
+    }
+    printf("\n");
+
+    printf("opcodes\n");
+    for (int i = 0; i < 0x400; ++i) {
+      val[0] = (i << 6) | 027;
+      t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
+      if (stat >= 1)
+        printf(".WORD %o", val[0]);
+      printf("\n");
+    }
     printf("\n");
   }
-  printf("\n");
-
-  printf("opcodes\n");
-  for (int i = 0; i < 0x400; ++i) {
-    val[0] = (i << 6) | 027;
-    t_stat stat = fprint_sym(stdout, 0, val, NULL, SWMASK('M'));
-    if (stat >= 1)
-      printf(".WORD %o", val[0]);
-    printf("\n");
-  }
-  printf("\n");
 
   return 0;
 }
