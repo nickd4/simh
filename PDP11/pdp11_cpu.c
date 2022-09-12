@@ -696,16 +696,56 @@ DEVICE cpu_dev = {
     };
 
 #if 1 // Nick
+//#undef fprintf
+
 int32 CPUERR, MAINT;
 int32 sim_interval = 0x100;
 int32 sim_int_char;
 
-int32 calc_ints(int32 nipl, int32 trq) {
-  return 0;
+/* from pdp11_io.c */
+int32 int_vec[IPL_HLVL][32];                            /* int req to vector */
+int32 (*int_ack[IPL_HLVL][32])(void);                   /* int ack routines */
+
+/* from pdp11_io.c */
+static const int32 int_internal[IPL_HLVL] = {
+    0,             INT_INTERNAL1, INT_INTERNAL2, INT_INTERNAL3,
+    INT_INTERNAL4, INT_INTERNAL5, INT_INTERNAL6, INT_INTERNAL7
+    };
+
+/* from pdp11_io.c */
+int32 calc_ints (int32 nipl, int32 trq)
+{
+int32 i, t;
+t_bool all_int = (UNIBUS || (nipl < IPL_HMIN));
+
+for (i = IPL_HLVL - 1; i > nipl; i--) {
+    t = all_int? int_req[i]: (int_req[i] & int_internal[i]);
+    if (t)
+        return (trq | TRAP_INT);
+    }
+return (trq & ~TRAP_INT);
 }
 
-int32 get_vector(int32 nipl) {
-  return 0;
+/* from pdp11_io.c */
+int32 get_vector (int32 nipl)
+{
+int32 i, j, t, vec;
+t_bool all_int = (UNIBUS || (nipl < IPL_HMIN));
+
+for (i = IPL_HLVL - 1; i > nipl; i--) {                 /* loop thru lvls */
+    t = all_int? int_req[i]: (int_req[i] & int_internal[i]);
+    for (j = 0; t && (j < 32); j++) {                   /* srch level */
+        if ((t >> j) & 1) {                             /* irq found? */
+            int_req[i] = int_req[i] & ~(1u << j);       /* clr irq */
+            if (int_ack[i][j])
+                vec = int_ack[i][j]();
+            else
+                vec = int_vec[i][j];
+            return vec;                                 /* return vector */
+            }                                           /* end if t */
+        }                                               /* end for j */
+    }                                                   /* end for i */
+return 0;
 }
 
 t_bool sim_idle(uint32 tmr, int sin_cyc) {
@@ -843,7 +883,7 @@ else {
    for stop condition.  If interrupt, locate the vector.
 */ 
 
-do/*while (reason == 0)*/  {
+while (reason == 0)  {
 
     int32 IR, srcspec, srcreg, dstspec, dstreg;
     int32 src, src2, dst, ea;
@@ -957,7 +997,13 @@ do/*while (reason == 0)*/  {
             (trapnum != TRAP_V_RED) && (trapnum != TRAP_V_YEL))
             set_stack_trap (SP);
         MMR0 = MMR0 | MMR0_IC;                          /* back to instr */
+#if 1 // Nick
+        // execute a trap as an instruction
+        reason = STOP_IBKPT;
+        break;
+#else
         continue;                                       /* end if traps */
+#endif
         }
 
 /* Fetch and decode next instruction */
@@ -2453,7 +2499,14 @@ do/*while (reason == 0)*/  {
         else setTRAP (TRAP_ILL);
         break;                                          /* end case 017 */
         }                                               /* end switch op */
-    } while (0);                                                   /* end main loop */
+#if 1 // Nick
+    // if trap, process immediately
+    // otherwise only step one instruction at a time
+    trap_req = calc_ints (ipl, trap_req);
+    if (trap_req == 0)
+        reason = STOP_IBKPT;
+#endif
+    }                                                   /* end main loop */
 
 /* Simulation halted */
 
