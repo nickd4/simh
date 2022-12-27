@@ -56,6 +56,9 @@
 #endif
 
 #if 1 // Nick
+#include <fcntl.h>
+#include <unistd.h>
+
 #undef fprintf
 #undef fputs
 #undef fputc
@@ -1688,50 +1691,92 @@ return vp;
 }
 
 #if 1 // Nick
-int main(void) {
-  t_value val[16] = {
-    0, 1, 2, 3, 4, 5, 6, 7,
-    8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf
-  };
+static uint8 mem[0x1000020]; // 16M + 32 bytes slop for disassembly lookahead
 
-  printf("addressing modes\n");
-  for (int i = 0; i < 0x100; ++i) {
-    val[0] = 0x94;
-    val[1] = i;
-    t_stat stat = fprint_sym_m(stdout, 0, val);
-    if (stat >= 1)
-      printf(".BYTE %X", val[0]);
-    printf("\n");
+int main(int argc, char **argv) {
+  if (argc >= 2) {
+    // command-line argument is .bin file to disassemble
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+      perror(argv[1]);
+      exit(EXIT_FAILURE);
+    }
+
+    ssize_t result = read(fd, mem, 0x1000000); // maximum of 16M
+    if (result == (ssize_t)-1) {
+      perror("read()");
+      exit(EXIT_FAILURE);
+    }
+    int size = (int)result;
+
+    close(fd);
+
+    t_value val[32];
+    int pc = 0;
+    while (pc < size) {
+      for (int i = 0; i < 32; ++i)
+        val[i] = mem[pc + i];
+      printf("%08X ", pc);
+      t_stat stat = fprint_sym_m(stdout, pc, val);
+      if (stat < 1)
+        pc += 1 - stat;
+      else {
+        printf(".BYTE %X", val[0]);
+        ++pc;
+      }
+      printf("\n");
+    }
   }
-  val[1] = 1;
-  printf("\n");
+  else {
+    // with no command-line argument, print opcode table
+    t_value val[32] = {
+      0, 1, 2, 3, 4, 5, 6, 7,
+      8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf,
+      0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+      0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    };
 
-  printf("opcodes\n");
-  for (int i = 0; i < 0x100; ++i) {
-    val[0] = i;
-    t_stat stat = fprint_sym_m(stdout, 0, val);
-    if (stat >= 1)
-      printf(".BYTE %X", val[0]);
-    printf("\n");
-  }
-  printf("\n");
-
-  t_value val2[16] = {
-    0, 0, 1, 2, 3, 4, 5, 6,
-    7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe
-  };
-
-  for (int i = 0xfd; i < 0xfe; ++i) { //0x100; ++i) {
-    printf("opcodes %02x\n", i);
-    val2[0] = i;
-    for (int j = 0; j < 0x100; ++j) {
-      val2[1] = j;
-      t_stat stat = fprint_sym_m(stdout, 0, val2);
+    printf("addressing modes\n");
+    for (int i = 0; i < 0x100; ++i) {
+      val[0] = 0x94;
+      val[1] = i;
+      t_stat stat = fprint_sym_m(stdout, 0, val);
       if (stat >= 1)
-        printf(".BYTE %X,%X", val2[0], val2[1]);
+        printf(".BYTE %X", val[0]);
+      printf("\n");
+    }
+    val[1] = 1;
+    printf("\n");
+
+    printf("opcodes\n");
+    for (int i = 0; i < 0x100; ++i) {
+      val[0] = i;
+      t_stat stat = fprint_sym_m(stdout, 0, val);
+      if (stat >= 1)
+        printf(".BYTE %X", val[0]);
       printf("\n");
     }
     printf("\n");
+
+    t_value val2[32] = {
+      0, 0, 1, 2, 3, 4, 5, 6,
+      7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe,
+      0xf, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16,
+      0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+    };
+
+    for (int i = 0xfd; i < 0xfe; ++i) { //0x100; ++i) {
+      printf("opcodes %02x\n", i);
+      val2[0] = i;
+      for (int j = 0; j < 0x100; ++j) {
+        val2[1] = j;
+        t_stat stat = fprint_sym_m(stdout, 0, val2);
+        if (stat >= 1)
+          printf(".BYTE %X,%X", val2[0], val2[1]);
+        printf("\n");
+      }
+      printf("\n");
+    }
   }
 
   return 0;
